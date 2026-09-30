@@ -18,6 +18,7 @@ jobs:
           base64 -d PathoAnatomy_Private_Viewer_SOURCE.zip.b64 > source.zip
           unzip -q source.zip
           test -f PathoAnatomyPrivateViewer/app/src/main/assets/course.pav
+          sed -i "s/compileSdk 37/compileSdk 36/; s/targetSdk 37/targetSdk 36/" PathoAnatomyPrivateViewer/app/build.gradle
 
       - uses: actions/setup-java@v4
         with:
@@ -35,7 +36,7 @@ jobs:
       - name: Install Android SDK components
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-37" "build-tools;36.0.0"
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - name: Create one-time release signing identity and pin it
         working-directory: PathoAnatomyPrivateViewer
@@ -58,10 +59,14 @@ jobs:
         run: |
           test -f PathoAnatomyPrivateViewer/app/build/outputs/apk/release/app-release.apk
           sha256sum PathoAnatomyPrivateViewer/app/build/outputs/apk/release/app-release.apk
+          sha256sum PathoAnatomyPrivateViewer/app/build/outputs/apk/release/app-release.apk > PathoAnatomyPrivateViewer/apk.sha256
 
       - uses: actions/upload-artifact@v4
         with:
           name: PathoAnatomy-Private-Viewer-release
-          path: PathoAnatomyPrivateViewer/app/build/outputs/apk/release/app-release.apk
+          path: |
+            PathoAnatomyPrivateViewer/app/build/outputs/apk/release/app-release.apk
+            PathoAnatomyPrivateViewer/release_cert_sha256.txt
+            PathoAnatomyPrivateViewer/apk.sha256
           if-no-files-found: error
           retention-days: 1
