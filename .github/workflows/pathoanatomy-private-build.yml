@@ -1,6 +1,8 @@
 name: PathoAnatomy temporary private build
 
 on:
+  push:
+    branches: [ pathoanatomy-private-build-temp ]
   pull_request:
     branches: [ main ]
     paths:
@@ -11,7 +13,6 @@ permissions:
 
 jobs:
   build:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'pathoanatomy-private-build-temp'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
