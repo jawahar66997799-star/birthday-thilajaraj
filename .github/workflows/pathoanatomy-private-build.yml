@@ -1,0 +1,80 @@
+name: PathoAnatomy temporary private build
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'PathoAnatomy_Private_Viewer_SOURCE.zip.b64'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'pathoanatomy-private-build-temp'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore encrypted-source project
+        run: |
+          base64 -d PathoAnatomy_Private_Viewer_SOURCE.zip.b64 > source.zip
+          unzip -q source.zip
+          test -f PathoAnatomyPrivateViewer/app/src/main/assets/course.pav
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-37" "build-tools;36.0.0"
+
+      - name: Create one-time release signing identity and pin it
+        working-directory: PathoAnatomyPrivateViewer
+        shell: bash
+        run: |
+          set -euo pipefail
+          PASS="$(openssl rand -hex 24)"
+          mkdir -p owner-secrets
+          keytool -genkeypair -v             -keystore owner-secrets/pathoanatomy-release.p12             -storetype PKCS12             -storepass "$PASS" -keypass "$PASS"             -alias pathoanatomy -keyalg RSA -keysize 3072             -validity 3650 -dname "CN=PathoAnatomy Private Viewer"
+          CERT_SHA="$(keytool -exportcert -alias pathoanatomy -keystore owner-secrets/pathoanatomy-release.p12 -storepass "$PASS" | sha256sum | awk '{print toupper($1)}')"
+          export CERT_SHA
+          python3 - <<'PY'
+from pathlib import Path
+import os,re
+p=Path("app/src/main/java/com/jawahar/pathoanatomy/privateviewer/SecurityConfig.java")
+s=p.read_text()
+s=re.sub(r'static final String EXPECTED_CERT_SHA256 = "[A-F0-9]+";',
+         'static final String EXPECTED_CERT_SHA256 = "'+os.environ["CERT_SHA"]+'";',s)
+p.write_text(s)
+print("Pinned generated release certificate.")
+PY
+          cat > owner-secrets/keystore.properties <<EOF
+storeFile=pathoanatomy-release.p12
+storePassword=$PASS
+keyAlias=pathoanatomy
+keyPassword=$PASS
+EOF
+
+      - name: Build signed release APK
+        working-directory: PathoAnatomyPrivateViewer
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Verify APK exists
+        run: |
+          test -f PathoAnatomyPrivateViewer/app/build/outputs/apk/release/app-release.apk
+          sha256sum PathoAnatomyPrivateViewer/app/build/outputs/apk/release/app-release.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PathoAnatomy-Private-Viewer-release
+          path: PathoAnatomyPrivateViewer/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 1
