@@ -3,10 +3,6 @@ name: PathoAnatomy temporary private build
 on:
   push:
     branches: [ pathoanatomy-private-build-temp ]
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'PathoAnatomy_Private_Viewer_SOURCE.zip.b64'
 
 permissions:
   contents: read
@@ -44,25 +40,11 @@ jobs:
           set -euo pipefail
           PASS="$(openssl rand -hex 24)"
           mkdir -p owner-secrets
-          keytool -genkeypair -v             -keystore owner-secrets/pathoanatomy-release.p12             -storetype PKCS12             -storepass "$PASS" -keypass "$PASS"             -alias pathoanatomy -keyalg RSA -keysize 3072             -validity 3650 -dname "CN=PathoAnatomy Private Viewer"
+          keytool -genkeypair -keystore owner-secrets/pathoanatomy-release.p12 -storetype PKCS12 -storepass "$PASS" -keypass "$PASS" -alias pathoanatomy -keyalg RSA -keysize 3072 -validity 3650 -dname "CN=PathoAnatomy Private Viewer"
           CERT_SHA="$(keytool -exportcert -alias pathoanatomy -keystore owner-secrets/pathoanatomy-release.p12 -storepass "$PASS" | sha256sum | awk '{print toupper($1)}')"
           export CERT_SHA
-          python3 - <<'PY'
-from pathlib import Path
-import os,re
-p=Path("app/src/main/java/com/jawahar/pathoanatomy/privateviewer/SecurityConfig.java")
-s=p.read_text()
-s=re.sub(r'static final String EXPECTED_CERT_SHA256 = "[A-F0-9]+";',
-         'static final String EXPECTED_CERT_SHA256 = "'+os.environ["CERT_SHA"]+'";',s)
-p.write_text(s)
-print("Pinned generated release certificate.")
-PY
-          cat > owner-secrets/keystore.properties <<EOF
-storeFile=pathoanatomy-release.p12
-storePassword=$PASS
-keyAlias=pathoanatomy
-keyPassword=$PASS
-EOF
+          python3 -c 'from pathlib import Path; import os,re; p=Path("app/src/main/java/com/jawahar/pathoanatomy/privateviewer/SecurityConfig.java"); s=p.read_text(); s=re.sub(r"static final String EXPECTED_CERT_SHA256 = \"[A-F0-9]+\";", "static final String EXPECTED_CERT_SHA256 = \""+os.environ["CERT_SHA"]+"\";", s); p.write_text(s)'
+          printf 'storeFile=pathoanatomy-release.p12\nstorePassword=%s\nkeyAlias=pathoanatomy\nkeyPassword=%s\n' "$PASS" "$PASS" > owner-secrets/keystore.properties
 
       - name: Build signed release APK
         working-directory: PathoAnatomyPrivateViewer
