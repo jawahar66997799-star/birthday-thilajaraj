@@ -19,6 +19,7 @@ jobs:
           unzip -q source.zip
           test -f PathoAnatomyPrivateViewer/app/src/main/assets/course.pav
           sed -i "s/compileSdk 37/compileSdk 36/; s/targetSdk 37/targetSdk 36/" PathoAnatomyPrivateViewer/app/build.gradle
+          sed -i "/import java.text.SimpleDateFormat;/a import java.security.SecureRandom;" PathoAnatomyPrivateViewer/app/src/main/java/com/jawahar/pathoanatomy/privateviewer/WatermarkView.java
 
       - uses: actions/setup-java@v4
         with:
